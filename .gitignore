@@ -6,3 +6,4 @@
 *.fatbin
 .vs/
 x64/
+packages/
