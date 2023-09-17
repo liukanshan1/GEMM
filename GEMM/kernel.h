@@ -1,6 +1,8 @@
 #pragma once
+
 #include <random>
 #include <iostream>
+
 int M, N, K;
 
 // 初始化参数
@@ -37,7 +39,6 @@ void random_matrix(float* matrix, int row, int col)
 	}
 }
 
-
 void print_matrix(float* matrix, int row, int col) {
 	for (int i = 0; i < row; ++i)
 	{
@@ -50,9 +51,9 @@ void print_matrix(float* matrix, int row, int col) {
 	}
 }
 
-void print_vector(float* vector, int row)
+void print_vector(float* vector, int len)
 {
-	for (int i = 0; i < row; ++i)
+	for (int i = 0; i < len; ++i)
 	{
 		std::cout << vector[i] << " ";
 	}

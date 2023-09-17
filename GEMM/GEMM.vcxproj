@@ -84,7 +84,7 @@
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="GEMM.h" />
+    <ClInclude Include="kernel.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
