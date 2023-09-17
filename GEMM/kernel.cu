@@ -1,121 +1,139 @@
 ﻿
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-
+#include "GEMM.h"
 #include <stdio.h>
 
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
-
-__global__ void addKernel(int *c, const int *a, const int *b)
+// Matrix multiplication kernel called by MatMul()
+__global__ void MatMulKernel(Matrix A, Matrix B, Matrix C)
 {
-    int i = threadIdx.x;
-    c[i] = a[i] + b[i];
+    // Each thread computes one element of C
+    // by accumulating results into Cvalue
+    float Cvalue = 0;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;	//结果矩阵C的行索引
+    int col = blockIdx.x * blockDim.x + threadIdx.x;	//结果矩阵C的列索引
+    for (int e = 0; e < A.width; ++e)
+    {
+        Cvalue += A.elements[row * A.width + e]			//所有点到点的元素乘积求和
+            * B.elements[e * B.width + col];
+        C.elements[row * C.width + col] = Cvalue;
+    }
 }
+
+template<int BLOCK_SIZE> __global__ void MatrixMulCUDA(float* C, float* A, float* B,
+    int wA, int wB, int hA, int hB)
+{
+    //Block index
+    int bx = blockIdx.x;
+    int by = blockIdx.y;
+
+    //Thread index
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+
+    //将矩阵划分为子矩阵，对子矩阵的乘法应用块内线程并行计算，最后将它们的值相加得到C的一个元素值
+    int aBegin = by * BLOCK_SIZE * wA;	//A的子矩阵的行坐标
+    int aStep = BLOCK_SIZE;				//A的子矩阵列坐标的移动步长
+    int aEnd = aBegin + wA - 1;			//限定一个终点
+
+    int bBegin = bx * BLOCK_SIZE;
+    int bStep = BLOCK_SIZE * wB;
+
+    float Csub = 0;		//定义在block(x,. y)块中（ty, tx）对应位置的C的元素值
+
+    int subAw = BLOCK_SIZE;
+    int subAh = BLOCK_SIZE;
+    int subBh = BLOCK_SIZE;
+    int subBw = BLOCK_SIZE;
+    for (int a = aBegin, b = bBegin; a <= aEnd; a += aStep, b += bStep)
+    {
+
+        if (a + aStep - 1 > aEnd)		//A矩阵最后一列的块的列数少于BLOCK_SIZE
+        {
+            subAw = aEnd - a + 1;
+        }
+        else
+        {
+            subAw = BLOCK_SIZE;
+        }
+        subBh = subAw;
+
+        if ((by + 1) * BLOCK_SIZE > hA)		//A矩阵最后一行的块的行数少于BLOCK_SIZE
+        {
+            subAh = hA - by * BLOCK_SIZE;
+        }
+        else
+        {
+            subAh = BLOCK_SIZE;
+        }
+
+        if ((bx + 1) * BLOCK_SIZE > wB)		//B矩阵最后一列的块的列数少于BLOCK_SIZE
+        {
+            subBw = wB - bx * BLOCK_SIZE;
+        }
+        else
+        {
+            subBw = BLOCK_SIZE;
+        }
+
+        /* 开辟块内共享内存 */
+        __shared__ float As[BLOCK_SIZE][BLOCK_SIZE];
+        __shared__ float Bs[BLOCK_SIZE][BLOCK_SIZE];
+
+        /* 为行和列范围内的子矩阵对应元素赋值 */
+        if (ty < subAh && tx < subAw)
+        {
+            As[ty][tx] = A[a + ty * wA + tx];
+        }
+        if (ty < subBh && tx < subBw)
+        {
+            Bs[ty][tx] = B[b + ty * wB + tx];
+        }
+        __syncthreads();
+
+        //展开循环来 编译以加速		
+#pragma unroll
+        //内循环计算每个子矩阵内对应行和列的向量乘积，累加到之前得到的值上
+        for (int k = 0; k < subAw; k++)
+        {
+            if (ty < subAh && tx < subBw)	//满足行和列约束内的元素计算乘积并求和
+            {
+                Csub += As[ty][k] * Bs[k][tx];
+            }
+        }
+        __syncthreads();
+    }
+
+    //满足行和列约束内的元素计算乘积并求和
+    if (ty < subAh && tx < subBw)
+    {
+        C[by * BLOCK_SIZE * wB + bx * BLOCK_SIZE + ty * wB + tx] = Csub;
+    }
+}
+
+
 
 int main()
 {
-    const int arraySize = 5;
-    const int a[arraySize] = { 1, 2, 3, 4, 5 };
-    const int b[arraySize] = { 10, 20, 30, 40, 50 };
-    int c[arraySize] = { 0 };
+    /* 参数设置 */
+    dim3 dimsA(1055, 2137, 1);		//矩阵的宽、高和未使用参数1
+    dim3 dimsB(108, 1055, 1);		//矩阵的宽、高和未使用参数1
 
-    // Add vectors in parallel.
-    cudaError_t cudaStatus = addWithCuda(c, a, b, arraySize);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "addWithCuda failed!");
-        return 1;
-    }
+    /* 矩阵初始化、内存传递等常规步骤
+    ....
+    */
+    float* A, * B, * C;
 
-    printf("{1,2,3,4,5} + {10,20,30,40,50} = {%d,%d,%d,%d,%d}\n",
-        c[0], c[1], c[2], c[3], c[4]);
+    float* d_A, * d_B, * d_C;
 
-    // cudaDeviceReset must be called before exiting in order for profiling and
-    // tracing tools such as Nsight and Visual Profiler to show complete traces.
-    cudaStatus = cudaDeviceReset();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceReset failed!");
-        return 1;
-    }
+
+    /* 调用核函数计算 */
+    dim3 threads(block_size, block_size);
+    dim3 grid((dimsB.x - 1) / threads.x + 1, (dimsA.y - 1) / threads.y + 1);
+
+    
+   
+    MatrixMulCUDA<block_size> <<<grid, threads >>> (d_C, d_A, d_B, dimsA.x, dimsB.x, dimsA.y, dimsB.y);
 
     return 0;
-}
-
-// Helper function for using CUDA to add vectors in parallel.
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size)
-{
-    int *dev_a = 0;
-    int *dev_b = 0;
-    int *dev_c = 0;
-    cudaError_t cudaStatus;
-
-    // Choose which GPU to run on, change this on a multi-GPU system.
-    cudaStatus = cudaSetDevice(0);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
-        goto Error;
-    }
-
-    // Allocate GPU buffers for three vectors (two input, one output)    .
-    cudaStatus = cudaMalloc((void**)&dev_c, size * sizeof(int));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMalloc((void**)&dev_a, size * sizeof(int));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMalloc((void**)&dev_b, size * sizeof(int));
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMalloc failed!");
-        goto Error;
-    }
-
-    // Copy input vectors from host memory to GPU buffers.
-    cudaStatus = cudaMemcpy(dev_a, a, size * sizeof(int), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
-
-    cudaStatus = cudaMemcpy(dev_b, b, size * sizeof(int), cudaMemcpyHostToDevice);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
-
-    // Launch a kernel on the GPU with one thread for each element.
-    addKernel<<<1, size>>>(dev_c, dev_a, dev_b);
-
-    // Check for any errors launching the kernel
-    cudaStatus = cudaGetLastError();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "addKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
-        goto Error;
-    }
-    
-    // cudaDeviceSynchronize waits for the kernel to finish, and returns
-    // any errors encountered during the launch.
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
-        goto Error;
-    }
-
-    // Copy output vector from GPU buffer to host memory.
-    cudaStatus = cudaMemcpy(c, dev_c, size * sizeof(int), cudaMemcpyDeviceToHost);
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaMemcpy failed!");
-        goto Error;
-    }
-
-Error:
-    cudaFree(dev_c);
-    cudaFree(dev_a);
-    cudaFree(dev_b);
-    
-    return cudaStatus;
 }

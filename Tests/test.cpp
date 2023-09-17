@@ -8,7 +8,7 @@ TEST(Header, GenMNK) {
 	EXPECT_LE(K, 10000);
 	EXPECT_GT(M, 0);
 	EXPECT_GT(N, 0);
-	EXPECT_GT(K, 0);
+	EXPECT_GT(K, 0);	
 	EXPECT_TRUE(true)<< M<<" " << N <<" " << K << " ";
 }
 

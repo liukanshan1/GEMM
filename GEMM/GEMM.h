@@ -4,15 +4,16 @@
 int M, N, K;
 
 // 初始化参数
-int m = 30;
-int n = 30;
-int k = 30;
+const int block_size = 32;
 
-enum class MatrixType
-{
-	RowMajor,
-	ColMajor
-};
+// Matrices are stored in row-major order:
+// M(row, col) = *(M.elements + row * M.width + col)
+typedef struct {
+	int width;
+	int height;
+	float* elements;
+} Matrix;
+
 
 //随机生成M，N，K
 void random_M_N_K()
@@ -26,74 +27,30 @@ void random_M_N_K()
 }
 
 //随机生成矩阵
-void random_matrix(double* matrix, int row, int col)
+void random_matrix(float* matrix, int row, int col)
 {
 	std::default_random_engine e;
-	std::uniform_real_distribution<double> u(-100, 100);
+	std::uniform_real_distribution<float> u(-100, 100);
 	for (int i = 0; i < row * col; i++)
 	{
 		matrix[i] = u(e);
 	}
 }
 
-//Row major 转 col major
-void row_to_col(double* matrix, int row, int col)
-{
-	double* temp = new double[row * col];
-	memccpy(temp, matrix, row * col, sizeof(double));
-	for (int i = 0; i < row; i++)
+
+void print_matrix(float* matrix, int row, int col) {
+	for (int i = 0; i < row; ++i)
 	{
+		std::cout << "[";
 		for (int j = 0; j < col; ++j)
 		{
-			matrix[j * row + i] = temp[i * col + j];
+			std::cout << matrix[i * col + j] << " ";
 		}
-	}
-	delete[] temp;
-}
-
-// Col major 转 row major
-void col_to_row(double* matrix, int row, int col)
-{
-	double* temp = new double[row * col];
-	memccpy(temp, matrix, row * col, sizeof(double));
-	for (int i = 0; i < row; i++)
-	{
-		for (int j = 0; j < col; ++j)
-		{
-			matrix[i * col + j] = temp[j * row + i];
-		}
-	}
-	delete[] temp;
-}
-
-void print_matrix(double* matrix, int row, int col, MatrixType type) {
-if (type == MatrixType::RowMajor)
-	{
-		for (int i = 0; i < row; ++i)
-		{
-			std::cout << "[";
-			for (int j = 0; j < col; ++j)
-			{
-				std::cout << matrix[i * col + j] << " ";
-			}
-			std::cout << "]" << std::endl;
-		}
-	}
-	else
-	{
-		for (int i = 0; i < row; ++i)
-		{
-			std::cout << "[";
-			for (int j = 0; j < col; ++j)
-			{
-				std::cout << matrix[j * row + i] << " ";
-			}
-			std::cout << "]" << std::endl;
-		}
+		std::cout << "]" << std::endl;
 	}
 }
 
-void print_vector(double* vector, int row)
+void print_vector(float* vector, int row)
 {
 	for (int i = 0; i < row; ++i)
 	{
@@ -101,4 +58,3 @@ void print_vector(double* vector, int row)
 	}
 	std::cout << std::endl;
 }
-		
