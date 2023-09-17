@@ -39,6 +39,20 @@ void random_matrix(float* matrix, int row, int col)
 	}
 }
 
+void matMulCPU(float* C_cpu, float* A, float* B)
+{
+	for (int i = 0; i < M; i++)
+	{
+		for (int j = 0; j < N; ++j)
+		{
+			for (int k = 0; k < K; ++k)
+			{
+				C_cpu[i * N + j] += A[i * K + k] * B[k * N + j];
+			}
+		}
+	}
+}
+
 void print_matrix(float* matrix, int row, int col) {
 	for (int i = 0; i < row; ++i)
 	{

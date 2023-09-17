@@ -2,20 +2,7 @@
 #include "device_launch_parameters.h"
 #include <stdio.h>
 #include "kernel.h"
-
-void matMulCPU(float* C_cpu, float* A, float* B)
-{
-    for (int i = 0; i < M; i++)
-    {
-        for (int j = 0; j < N; ++j)
-        {
-            for (int k = 0; k < K; ++k)
-            {
-                C_cpu[i * N + j] += A[i * K + k] * B[k * N + j];
-            }
-        }
-    }
-}
+#include "cublas_v2.h"
 
 __global__ void MatrixMulCUDA(float* C, float* A, float* B,
     int wA, int wB, int hA, int hB)
@@ -108,8 +95,6 @@ __global__ void MatrixMulCUDA(float* C, float* A, float* B,
     }
 }
 
-
-
 int main()
 {
     /* 参数设置 */
@@ -137,7 +122,7 @@ int main()
     dim3 threads(block_size, block_size);
     dim3 grid((dimsB.x - 1) / threads.x + 1, (dimsA.y - 1) / threads.y + 1);
 
-    MatrixMulCUDA <<<grid, threads >>> (d_C, d_A, d_B, dimsA.x, dimsB.x, dimsA.y, dimsB.y);
+    MatrixMulCUDA <<< grid, threads >>> (d_C, d_A, d_B, dimsA.x, dimsB.x, dimsA.y, dimsB.y);
 
     /* 结果传回主机端 */
     cudaMemcpy(C, d_C, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
@@ -155,11 +140,30 @@ int main()
 		}
 	}
 
+    // cublas实现
+    cublasHandle_t handle;
+    cublasCreate(&handle);
+    float alpha = 1.0f;
+    float beta = 0.0f;
+    float* d_C_cublas;
+    cudaMalloc((void**)&d_C_cublas, sizeof(float) * M * N);
+    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, d_B, N, d_A, K, &beta, d_C_cublas, N);
+    cudaMemcpy(C, d_C_cublas, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
+    cublasDestroy(handle);
+    for (int i = 0; i < M * N; i++)
+    {
+        if (abs(C_cpu[i] - C[i]) > 1e-5)
+        {
+            printf("GPUWrong!\n");
+            std::cout << abs(C_cpu[i] - C[i]) << std::endl;
+            break;
+        }
+    }
+
     //print_matrix(C, M, N);
     //print_matrix(C_cpu, M, N);
     print_vector(C, 10);
     print_vector(C_cpu, 10);
-
 
     return 0;
 }
