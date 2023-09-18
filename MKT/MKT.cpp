@@ -14,7 +14,11 @@ int main()
     random_matrix(B, K, N);
 
     // 矩阵乘法
+    clock_t start1, end1;
+    start1 = clock();
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, M, N, K, 1.0, A, K, B, N, 0.0, C, N);
+    end1 = clock();
+    printf("mkl time: %f ms\n", ((double)(end1 - start1) / CLOCKS_PER_SEC) * 1000);
 
     /* 结果验证 */
     float* C_cpu = new float[M * N];
@@ -24,18 +28,16 @@ int main()
     {
         if (abs(C_cpu[i] - C[i]) > 1e-5)
         {
-            printf("Wrong!");
+            printf("mkl Wrong!");
             std::cout << abs(C_cpu[i] - C[i]) << std::endl;
             break;
         }
     }
-
     print_vector(C, 10);
     print_vector(C_cpu, 10);
     
     mkl_free(A);
     mkl_free(B);
     mkl_free(C);
-
     return 0;
 }

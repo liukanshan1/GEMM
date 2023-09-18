@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include "kernel.h"
 #include "cublas_v2.h"
+#include<ctime>
+#include<cstdlib>
 
 __global__ void MatrixMulCUDA(float* C, float* A, float* B,
     int wA, int wB, int hA, int hB)
@@ -99,8 +101,13 @@ int main()
 {
     /* 参数设置 */
     random_M_N_K();
-    dim3 dimsA(K, M, 1);		//矩阵的宽、高和未使用参数1
-    dim3 dimsB(N, K, 1);		//矩阵的宽、高和未使用参数1
+    std::cout << M << " " << N << " " << K << std::endl;
+    std::cout << "block_size: " << block_size << std::endl;
+
+    // 计时
+    clock_t start1, end1;
+    clock_t start2, end2;
+    clock_t start3, end3;
 
     /* 矩阵初始化、内存传递等常规步骤 */
     float* A, * B, * C;
@@ -109,36 +116,51 @@ int main()
     C = new float[M * N];
     random_matrix(A, M, K);
     random_matrix(B, K, N);
-    memset(C, 0, sizeof(float) * M * N);
     float* d_A, * d_B, * d_C;
     cudaMalloc((void**)&d_A, sizeof(float) * M * K);
     cudaMalloc((void**)&d_B, sizeof(float) * K * N);
     cudaMalloc((void**)&d_C, sizeof(float) * M * N);
-    cudaMemcpy(d_A, A, sizeof(float) * M * K, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_B, B, sizeof(float) * K * N, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_C, C, sizeof(float) * M * N, cudaMemcpyHostToDevice);
 
     /* 调用核函数计算 */
+    dim3 dimsA(K, M, 1);		//矩阵的宽、高和未使用参数1
+    dim3 dimsB(N, K, 1);		//矩阵的宽、高和未使用参数1
     dim3 threads(block_size, block_size);
     dim3 grid((dimsB.x - 1) / threads.x + 1, (dimsA.y - 1) / threads.y + 1);
 
+    // GEMM on GPU
+    start1 = clock();
+
+    //cudaMemcpy(d_A, A, sizeof(float) * M * K, cudaMemcpyHostToDevice);
+    //cudaMemcpy(d_B, B, sizeof(float) * K * N, cudaMemcpyHostToDevice);
     MatrixMulCUDA <<< grid, threads >>> (d_C, d_A, d_B, dimsA.x, dimsB.x, dimsA.y, dimsB.y);
+    cudaMemcpy(C, d_C, sizeof(float) * M * N, cudaMemcpyDeviceToHost);  /* 结果传回主机端 */
 
-    /* 结果传回主机端 */
-    cudaMemcpy(C, d_C, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
+    end1 = clock();
+    double endtime = (double)(end1 - start1) / CLOCKS_PER_SEC;
+    endtime *= 1000;
+    printf("GPU time: %f ms\n", endtime);
 
-    /* 结果验证 */
+    // GEMM on CPU
     float* C_cpu = new float[M * N];
     memset(C_cpu, 0, sizeof(float) * M * N);
+    start2 = clock();
     matMulCPU(C_cpu, A, B);
+    end2 = clock();
+    double endtime2 = (double)(end2 - start2) / CLOCKS_PER_SEC;
+    endtime2 *= 1000;
+    printf("CPU time: %f ms\n", endtime2);
+
+    /* GEMM 结果验证 */
     for (int i = 0; i < M * N; i++)
     {
         if (abs(C_cpu[i] - C[i]) > 1e-5)
         {
-			printf("Wrong!\n");
+			printf("GEMM Wrong!\n");
 			break;
 		}
 	}
+    print_vector(C, 10);
+    print_vector(C_cpu, 10);
 
     // cublas实现
     cublasHandle_t handle;
@@ -147,21 +169,28 @@ int main()
     float beta = 0.0f;
     float* d_C_cublas;
     cudaMalloc((void**)&d_C_cublas, sizeof(float) * M * N);
+
+    start3 = clock();
+    cudaMemcpy(d_A, A, sizeof(float) * M * K, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, sizeof(float) * K * N, cudaMemcpyHostToDevice);
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, d_B, N, d_A, K, &beta, d_C_cublas, N);
     cudaMemcpy(C, d_C_cublas, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
+    end3 = clock();
+    double endtime3 = (double)(end3 - start3) / CLOCKS_PER_SEC;
+    endtime3 *= 1000;
+    printf("cublas time: %f ms\n", endtime3);
     cublasDestroy(handle);
+
+    /* cublas 结果验证 */
     for (int i = 0; i < M * N; i++)
     {
         if (abs(C_cpu[i] - C[i]) > 1e-5)
         {
-            printf("GPUWrong!\n");
+            printf("cublas Wrong!\n");
             std::cout << abs(C_cpu[i] - C[i]) << std::endl;
             break;
         }
     }
-
-    //print_matrix(C, M, N);
-    //print_matrix(C_cpu, M, N);
     print_vector(C, 10);
     print_vector(C_cpu, 10);
 
