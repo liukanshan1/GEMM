@@ -130,8 +130,8 @@ int main()
     // GEMM on GPU
     start1 = clock();
 
-    //cudaMemcpy(d_A, A, sizeof(float) * M * K, cudaMemcpyHostToDevice);
-    //cudaMemcpy(d_B, B, sizeof(float) * K * N, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_A, A, sizeof(float) * M * K, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, sizeof(float) * K * N, cudaMemcpyHostToDevice);
     MatrixMulCUDA <<< grid, threads >>> (d_C, d_A, d_B, dimsA.x, dimsB.x, dimsA.y, dimsB.y);
     cudaMemcpy(C, d_C, sizeof(float) * M * N, cudaMemcpyDeviceToHost);  /* 结果传回主机端 */
 
