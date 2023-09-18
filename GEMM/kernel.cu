@@ -6,6 +6,9 @@
 #include<ctime>
 #include<cstdlib>
 
+// 初始化参数
+const int block_size = 72;
+
 __global__ void MatrixMulCUDA(float* C, float* A, float* B,
     int wA, int wB, int hA, int hB)
 {
@@ -101,6 +104,9 @@ int main()
 {
     /* 参数设置 */
     random_M_N_K();
+    M = 500;
+    N = 500;
+    K = 7000;
     std::cout << M << " " << N << " " << K << std::endl;
     std::cout << "block_size: " << block_size << std::endl;
 

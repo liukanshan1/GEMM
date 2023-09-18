@@ -6,6 +6,9 @@ int main()
 {
     /* 参数设置 */
     random_M_N_K();
+    M = 900;
+    N = 900;
+    K = 7000;
     float* A, * B, *C;
     A = (float*)mkl_malloc(M * K * sizeof(float), 64);
     B = (float*)mkl_malloc(K * N * sizeof(float), 64);

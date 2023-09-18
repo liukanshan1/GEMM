@@ -5,9 +5,6 @@
 
 int M, N, K;
 
-// 初始化参数
-const int block_size = 32;
-
 // Matrices are stored in row-major order:
 // M(row, col) = *(M.elements + row * M.width + col)
 typedef struct {
@@ -15,7 +12,6 @@ typedef struct {
 	int height;
 	float* elements;
 } Matrix;
-
 
 //随机生成M，N，K
 void random_M_N_K()
