@@ -6,9 +6,9 @@ int main()
 {
     /* 参数设置 */
     random_M_N_K();
-    M = 900;
-    N = 900;
-    K = 7000;
+    M = 950;
+    N = 950;
+    K = 9000;
     float* A, * B, *C;
     A = (float*)mkl_malloc(M * K * sizeof(float), 64);
     B = (float*)mkl_malloc(K * N * sizeof(float), 64);
@@ -27,15 +27,19 @@ int main()
     float* C_cpu = new float[M * N];
     memset(C_cpu, 0, sizeof(float) * M * N);
     matMulCPU(C_cpu, A, B);
+    double errorCountForMKL = 0;
     for (int i = 0; i < M * N; i++)
     {
         if (abs(C_cpu[i] - C[i]) > 1e-5)
         {
-            printf("mkl Wrong!");
-            std::cout << abs(C_cpu[i] - C[i]) << std::endl;
-            break;
+            errorCountForMKL+=1;
+            //printf("mkl Wrong!\n");
+            //std::cout << abs(C_cpu[i] - C[i]) << std::endl;
+            //break;
         }
     }
+    printf("Error times of MKL: %f\n", errorCountForMKL);
+    printf("Error rate of MKL: %f\n", errorCountForMKL / (M * N));
     print_vector(C, 10);
     print_vector(C_cpu, 10);
     
